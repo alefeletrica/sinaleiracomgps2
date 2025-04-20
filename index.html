@@ -116,7 +116,6 @@
 
     <div id="status">🔄 Aguardando conexão com o broker...</div>
 
-    
     <div id="preciseLocation">📍 Buscando localização exata...</div>
     <div id="warning"></div>
 
@@ -151,11 +150,14 @@
         const payload = message.toString().trim().toLowerCase();
         console.log("📥 Mensagem recebida:", payload);
 
-        if (payload === "onsinaleirametro123" || payload === "offsinaleirametro123") {
-          const simbolo = payload.includes("on") ? "🔴" : "⚫";
-          const texto = payload.includes("on") ? "LIGADA" : "DESLIGADA";
+        const isOnCommand = payload === "onsinaleirametro123" || payload === "onsinalmetro123";
+        const isOffCommand = payload === "offsinaleirametro123" || payload === "offsinalmetro123";
+
+        if (isOnCommand || isOffCommand) {
+          const simbolo = isOnCommand ? "🔴" : "⚫";
+          const texto = isOnCommand ? "LIGADA" : "DESLIGADA";
           document.getElementById("status").textContent = `${simbolo} Sinaleira ${texto}`;
-          toggleTrem(payload.includes("on"));
+          toggleTrem(isOnCommand);
         }
       }
     });
@@ -186,7 +188,6 @@
       }
     }
 
-
     // Localização automática ao carregar
     window.onload = getLocation;
 
@@ -215,7 +216,6 @@
           const localString = `${bairro}, ${cidade}, ${estado}, ${pais}`;
           document.getElementById("preciseLocation").textContent = `📍 Localização exata: ${localString}`;
 
-          // Validar localização autorizada
           if (
             bairro.toLowerCase().includes("jabaquara") &&
             cidade.toLowerCase() === "são paulo" &&
