@@ -1,0 +1,130 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+// ======= Config Wi-Fi =======
+const char* ssid = "testesinaleira";
+const char* password = "corretivaL1";
+
+// ======= Config MQTT (EMQX) =======
+const char* mqtt_server = "broker.emqx.io";
+const int mqtt_port = 1883;
+const char* mqtt_topic = "controle/sinaleirametro";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+// Pines
+const int entradaOn = 26;
+const int entradaOff = 27;
+const int saidaOn = 12;
+const int saidaOff = 13;
+
+bool estadoEntradaOn = true;
+bool estadoEntradaOff = true;
+
+void setup_wifi() {
+  WiFi.begin(ssid, password);
+  Serial.print("🔌 Conectando ao WiFi");
+  int tentativas = 0;
+  while (WiFi.status() != WL_CONNECTED && tentativas < 20) {
+    delay(500);
+    Serial.print(".");
+    tentativas++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ WiFi conectado!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n❌ Falha ao conectar no WiFi.");
+  }
+}
+
+void check_wifi() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("📶 WiFi desconectado! Reconectando...");
+    setup_wifi(); // tenta reconectar
+  }
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  char message[100];
+  if (length >= sizeof(message)) length = sizeof(message) - 1;
+
+  memcpy(message, payload, length);
+  message[length] = '\0';
+
+  Serial.printf("📩 Mensagem recebida [%s]: %s\n", topic, message);
+
+  if (strcmp(message, "onsinaleirametro123") == 0) {
+    digitalWrite(saidaOn, LOW);
+    delay(500);
+    digitalWrite(saidaOn, HIGH);
+    Serial.println("⚡ Saída ON ativada por 0.5s");
+  } else if (strcmp(message, "offsinaleirametro123") == 0) {
+    digitalWrite(saidaOff, LOW);
+    delay(500);
+    digitalWrite(saidaOff, HIGH);
+    Serial.println("⚡ Saída OFF ativada por 0.5s");
+  }
+}
+
+void reconnect() {
+  if (!client.connected()) {
+    Serial.print("🔁 Tentando conectar ao broker MQTT... ");
+    String clientId = "ESP32Client-" + String(random(0xffff), HEX);
+    if (client.connect(clientId.c_str())) {
+      Serial.println("✅ Conectado ao broker!");
+      client.subscribe(mqtt_topic);
+    } else {
+      Serial.print("❌ Falha (rc=");
+      Serial.print(client.state());
+      Serial.println("), tentando novamente depois.");
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  setup_wifi();
+
+  pinMode(entradaOn, INPUT_PULLUP);
+  pinMode(entradaOff, INPUT_PULLUP);
+  pinMode(saidaOn, OUTPUT);
+  pinMode(saidaOff, OUTPUT);
+  digitalWrite(saidaOn, HIGH);
+  digitalWrite(saidaOff, HIGH);
+
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
+
+  randomSeed(micros());
+}
+
+void loop() {
+  check_wifi();         // ✅ Verifica Wi-Fi
+  reconnect();          // ✅ Verifica MQTT
+  client.loop();
+
+  bool leituraOn = digitalRead(entradaOn);
+  bool leituraOff = digitalRead(entradaOff);
+
+  if (leituraOn && estadoEntradaOn) {
+    client.publish(mqtt_topic, "onsinalmetro123");
+    Serial.println("🔼 Botão ON (NF) acionado -> 'onsinalmetro123'");
+    estadoEntradaOn = false;
+  } else if (!leituraOn) {
+    estadoEntradaOn = true;
+  }
+
+  if (!leituraOff && estadoEntradaOff) {
+    client.publish(mqtt_topic, "offsinalmetro123");
+    Serial.println("🔽 Botão OFF (NA) acionado -> 'offsinalmetro123'");
+    estadoEntradaOff = false;
+  } else if (leituraOff) {
+    estadoEntradaOff = true;
+  }
+
+  delay(50);
+}
